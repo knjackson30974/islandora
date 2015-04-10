@@ -1,0 +1,103 @@
+diff --git a/includes/delete_datastream.form.inc b/includes/delete_datastream.form.inc
+index b88ef0d..14bb8eb 100644
+--- a/includes/delete_datastream.form.inc
++++ b/includes/delete_datastream.form.inc
+@@ -22,7 +22,6 @@ function islandora_delete_datastream_form(array $form, array &$form_state, Abstr
+   // XXX: Stashed version of datastream is deprecated... Use object and
+   // datastream IDs from 'datastream_info' to acquire.
+   $form_state['datastream'] = $datastream;
+-
+   $form_state['datastream_info'] = array(
+     'object_id' => $datastream->parent->id,
+     'datastream_id' => $datastream->id,
+@@ -32,10 +31,10 @@ function islandora_delete_datastream_form(array $form, array &$form_state, Abstr
+   $dsids = array_merge(array($dsid), islandora_datastream_to_purge($object, $dsid));
+   $dsids = array_unique($dsids);
+   $form['delete_derivatives'] = array(
+-    '#title' => t('Delete Derviatives'),
++    '#title' => t('Delete Derivatives'),
+     '#type' => 'checkbox',
+     '#default_value' => 0,
+-    '#description' => t('Derivatives can be regenerated at a later time.'),
++        '#description' => t('Derivatives can be regenerated at a later time.'),
+   );
+   $form['base_info'] = array(
+     '#type' => 'item',
+@@ -72,7 +71,7 @@ function islandora_delete_datastream_form(array $form, array &$form_state, Abstr
+  */
+ function islandora_datastream_to_purge(AbstractObject $object, $dsid) {
+   module_load_include('inc', 'islandora', 'includes/utilities');
+-  $hooks = islandora_invoke_hook_list(ISLANDORA_DERVIATIVE_CREATION_HOOK, $object->models, array($object));
++  $hooks = islandora_invoke_hook_list(ISLANDORA_DERIVATIVE_CREATION_HOOK, $object->models, array($object));
+   $hook_filter = function ($hook_def) use ($dsid) {
+     return isset($hook_def['source_dsid']) && isset($hook_def['destination_dsid']) ?
+       $hook_def['source_dsid'] == $dsid :
+@@ -119,7 +118,6 @@ function islandora_delete_datastream_form_submit(array $form, array &$form_state
+   $object = islandora_object_load($form_state['datastream_info']['object_id']);
+   $datastream_id = $form_state['datastream_info']['datastream_id'];
+   $datastream = $object[$datastream_id];
+-
+   $deleted = FALSE;
+   if ($form_state['values']['delete_derivatives']) {
+     islandora_datastream_derivatives_purged($object, $datastream_id);
+diff --git a/includes/derivatives.inc b/includes/derivatives.inc
+index 7248f03..74ca2f7 100644
+--- a/includes/derivatives.inc
++++ b/includes/derivatives.inc
+@@ -83,7 +83,7 @@ function islandora_do_derivatives(AbstractObject $object, array $options) {
+   $options += array(
+     'force' => FALSE,
+   );
+-  $hooks = islandora_invoke_hook_list(ISLANDORA_DERVIATIVE_CREATION_HOOK, $object->models, array($object));
++  $hooks = islandora_invoke_hook_list(ISLANDORA_DERIVATIVE_CREATION_HOOK, $object->models, array($object));
+   uasort($hooks, 'drupal_sort_weight');
+   $results = array();
+   $hooks = islandora_filter_derivatives($hooks, $options, $object);
+@@ -176,7 +176,7 @@ function islandora_do_batch_derivatives(AbstractObject $object, array $options)
+   $options += array(
+     'force' => FALSE,
+   );
+-  $hooks = islandora_invoke_hook_list(ISLANDORA_DERVIATIVE_CREATION_HOOK, $object->models, array($object));
++  $hooks = islandora_invoke_hook_list(ISLANDORA_DERIVATIVE_CREATION_HOOK, $object->models, array($object));
+   uasort($hooks, 'drupal_sort_weight');
+   $operations = array();
+ 
+diff --git a/includes/object_properties.form.inc b/includes/object_properties.form.inc
+index b8fcef7..ba97580 100644
+--- a/includes/object_properties.form.inc
++++ b/includes/object_properties.form.inc
+@@ -29,7 +29,7 @@ function islandora_object_properties_form(array $form, array &$form_state, Abstr
+   $regenerate_derivatives_access = FALSE;
+   if (islandora_object_access(ISLANDORA_REGENERATE_DERIVATIVES, $object)) {
+     module_load_include('inc', 'islandora', 'includes/derivatives');
+-    $hooks = islandora_invoke_hook_list(ISLANDORA_DERVIATIVE_CREATION_HOOK, $object->models, array($object));
++    $hooks = islandora_invoke_hook_list(ISLANDORA_DERIVATIVE_CREATION_HOOK, $object->models, array($object));
+     $hooks = islandora_filter_derivatives($hooks, array('force' => TRUE), $object);
+     if (count($hooks) >= 1) {
+       $regenerate_derivatives_access = TRUE;
+diff --git a/islandora.module b/islandora.module
+index cfd045e..8c57904 100644
+--- a/islandora.module
++++ b/islandora.module
+@@ -58,7 +58,11 @@ define('ISLANDORA_DATASTREAM_INGESTED_HOOK', 'islandora_datastream_ingested');
+ define('ISLANDORA_DATASTREAM_MODIFIED_HOOK', 'islandora_datastream_modified');
+ define('ISLANDORA_DATASTREAM_PURGED_HOOK', 'islandora_datastream_purged');
+ define('ISLANDORA_INGEST_STEP_HOOK', 'islandora_ingest_steps');
+-define('ISLANDORA_DERVIATIVE_CREATION_HOOK', 'islandora_derivative');
++define('ISLANDORA_DERIVATIVE_CREATION_HOOK', 'islandora_derivative');
++// The "ISLANDORA_DERVIATIVE_CREATION_HOOK" constant has deprecated as of
++// 7.x-1.5, and should be removed after the next release.
++define('ISLANDORA_DERVIATIVE_CREATION_HOOK', ISLANDORA_DERIVATIVE_CREATION_HOOK);
++
+ 
+ // Autocomplete paths.
+ define('ISLANDORA_CONTENT_MODELS_AUTOCOMPLETE', 'islandora/autocomplete/content-models');
+@@ -1946,7 +1950,7 @@ function islandora_islandora_datastream_access($op, AbstractDatastream $datastre
+     module_load_include('inc', 'islandora', 'includes/derivatives');
+     $applicable_hook = FALSE;
+     $object = $datastream->parent;
+-    $hooks = islandora_invoke_hook_list(ISLANDORA_DERVIATIVE_CREATION_HOOK, $object->models, array($object));
++    $hooks = islandora_invoke_hook_list(ISLANDORA_DERIVATIVE_CREATION_HOOK, $object->models, array($object));
+     $hooks = islandora_filter_derivatives($hooks, array('force' => TRUE), $object);
+     foreach ($hooks as $hook) {
+       if (isset($hook['destination_dsid']) && $hook['destination_dsid'] == $datastream->id &&
